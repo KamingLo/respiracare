@@ -1,0 +1,392 @@
+import type { Server as HttpServer } from 'node:http';
+import { Server as SocketIOServer, type Socket } from 'socket.io';
+import { Officer, type OfficerRole } from '../models/Officer.js';
+import type {
+  ClusterCategory,
+  ClusterLegacyRiskLevel,
+  ClusterRiskColor,
+  ClusterRiskStatus,
+  ClusterStatus,
+} from '../models/Cluster.js';
+import type { IGeoPoint, IGeoPolygon } from '../models/GeoJSON.js';
+import type { ReportAgeGroup, ReportSeverity, ReportStatus } from '../models/Report.js';
+import { verifyOfficerToken, type JwtOfficerPayload } from '../utils/jwt.js';
+
+export const SOCKET_EVENTS = {
+  CONNECTION_AUTHENTICATED: 'connection:authenticated',
+  REPORT_NEW: 'report:new',
+  CLUSTER_DETECTED: 'cluster:detected',
+  CLUSTER_UPDATED: 'cluster:updated',
+} as const;
+
+export const SOCKET_ROOMS = {
+  ALL_OFFICERS: 'officers',
+  byRole: (role: OfficerRole): string => `role:${role}`,
+  byKelurahan: (kelurahanId: string): string => `kelurahan:${kelurahanId}`,
+} as const;
+
+export interface AuthenticatedSocketOfficer extends JwtOfficerPayload {
+  name?: string;
+  assignedKelurahan?: string;
+}
+
+export interface ConnectionAuthenticatedSocketPayload {
+  socketId: string;
+  officer: {
+    officerId: string;
+    name?: string;
+    email: string;
+    role: OfficerRole;
+    nip: string;
+    assignedKelurahan?: string;
+  };
+  rooms: string[];
+  connectedAt: string;
+}
+
+export interface NewReportSocketPayload {
+  event: typeof SOCKET_EVENTS.REPORT_NEW;
+  isUpdated: boolean;
+  report: {
+    id: string;
+    reporterName: string;
+    category: string;
+    symptoms: string[];
+    sickCount: number;
+    age: number;
+    ageGroups: ReportAgeGroup[];
+    severity: ReportSeverity;
+    status: ReportStatus;
+    geom: IGeoPoint;
+    address?: string;
+    kelurahanId?: string;
+    reportedAt: string;
+  };
+  emittedAt: string;
+}
+
+export interface SocketClusterItem {
+  id: string;
+  clusterCode: string;
+  category: ClusterCategory;
+  kelurahanId?: string;
+  center: IGeoPoint;
+  boundary?: IGeoPolygon;
+  radiusMeters: number;
+  reportCount: number;
+  totalSickCount: number;
+  averageAqi?: number;
+  dominantSymptoms: string[];
+  riskStatus: ClusterRiskStatus;
+  riskColor: ClusterRiskColor;
+  colorHex: string;
+  riskLevel: ClusterLegacyRiskLevel;
+  status: ClusterStatus;
+  assignedOfficerId?: string;
+  firstDetectedAt: string;
+  lastUpdatedAt: string;
+}
+
+export interface ClusterDetectedSocketPayload {
+  event: typeof SOCKET_EVENTS.CLUSTER_DETECTED;
+  clustersDetected: number;
+  clustersByCategory: {
+    ispa: number;
+    diare: number;
+  };
+  upsertedClusterIds: string[];
+  resolvedStaleCount: number;
+  clusters: SocketClusterItem[];
+  detectedAt: string;
+}
+
+export interface ClusterUpdatedSocketPayload {
+  event: typeof SOCKET_EVENTS.CLUSTER_UPDATED;
+  clusterId: string;
+  clusterCode: string;
+  previousStatus: ClusterStatus;
+  status: ClusterStatus;
+  riskStatus: ClusterRiskStatus;
+  riskLevel: ClusterLegacyRiskLevel;
+  assignedOfficerId?: string;
+  updatedBy?: {
+    officerId: string;
+    email: string;
+    role: OfficerRole;
+  };
+  cluster: SocketClusterItem;
+  updatedAt: string;
+}
+
+export interface SocketServerToClientEvents {
+  [SOCKET_EVENTS.CONNECTION_AUTHENTICATED]: (
+    payload: ConnectionAuthenticatedSocketPayload
+  ) => void;
+  [SOCKET_EVENTS.REPORT_NEW]: (payload: NewReportSocketPayload) => void;
+  [SOCKET_EVENTS.CLUSTER_DETECTED]: (payload: ClusterDetectedSocketPayload) => void;
+  [SOCKET_EVENTS.CLUSTER_UPDATED]: (payload: ClusterUpdatedSocketPayload) => void;
+}
+
+export interface SocketClientToServerEvents {
+  'ping:dashboard': (callback?: (res: { pong: true; timestamp: string }) => void) => void;
+}
+
+export interface SocketInterServerEvents {
+  ping: () => void;
+}
+
+export interface SocketData {
+  officer?: AuthenticatedSocketOfficer;
+}
+
+export type RespiraSocket = Socket<
+  SocketClientToServerEvents,
+  SocketServerToClientEvents,
+  SocketInterServerEvents,
+  SocketData
+>;
+
+export type RespiraSocketServer = SocketIOServer<
+  SocketClientToServerEvents,
+  SocketServerToClientEvents,
+  SocketInterServerEvents,
+  SocketData
+>;
+
+let ioInstance: RespiraSocketServer | null = null;
+
+export const extractHandshakeToken = (socket: RespiraSocket): string | null => {
+  const authToken = socket.handshake.auth?.token;
+  if (typeof authToken === 'string' && authToken.trim().length > 0) {
+    const trimmed = authToken.trim();
+    return trimmed.startsWith('Bearer ') ? trimmed.slice(7).trim() : trimmed;
+  }
+
+  const authHeader = socket.handshake.headers?.authorization;
+  if (typeof authHeader === 'string' && authHeader.trim().length > 0) {
+    const trimmed = authHeader.trim();
+    if (trimmed.startsWith('Bearer ')) {
+      const tokenPart = trimmed.slice(7).trim();
+      if (tokenPart.length > 0) {
+        return tokenPart;
+      }
+    } else {
+      return trimmed;
+    }
+  }
+
+  const queryToken = socket.handshake.query?.token;
+  if (typeof queryToken === 'string' && queryToken.trim().length > 0) {
+    const trimmed = queryToken.trim();
+    return trimmed.startsWith('Bearer ') ? trimmed.slice(7).trim() : trimmed;
+  }
+
+  return null;
+};
+
+/**
+ * Menginisialisasi server Socket.io di atas HTTP server Express dengan
+ * autentikasi JWT ketat pada fase handshake (`io.use(...)`).
+ *
+ * @param httpServer - Instance `http.Server` Node.js
+ * @returns Instance `SocketIOServer` yang telah dikonfigurasi
+ */
+export const initSocketServer = (httpServer: HttpServer): RespiraSocketServer => {
+  if (ioInstance) {
+    return ioInstance;
+  }
+
+  const rawCorsOrigin = (process.env.CORS_ORIGIN || '*').trim();
+  const corsOrigin =
+    rawCorsOrigin === '*'
+      ? '*'
+      : rawCorsOrigin
+          .split(',')
+          .map((origin) => origin.trim())
+          .filter(Boolean);
+
+  const io: RespiraSocketServer = new SocketIOServer(httpServer, {
+    cors: {
+      origin: corsOrigin,
+      methods: ['GET', 'POST', 'PATCH'],
+      credentials: true,
+    },
+    transports: ['websocket', 'polling'],
+  });
+
+  /**
+   * Middleware Autentikasi JWT pada fase Handshake WebSocket.
+   * Menolak koneksi sebelum terbentuk apabila token tidak disertakan,
+   * tidak valid/kedaluwarsa, atau akun petugas sudah dinonaktifkan.
+   */
+  io.use(async (socket: RespiraSocket, next) => {
+    try {
+      const token = extractHandshakeToken(socket);
+      if (!token) {
+        return next(
+          new Error(
+            'UNAUTHORIZED: Token autentikasi JWT wajib disertakan pada saat handshake (auth.token atau header Authorization).'
+          )
+        );
+      }
+
+      const payload = await verifyOfficerToken(token);
+      if (!payload || !payload.officerId) {
+        return next(new Error('UNAUTHORIZED: Payload token JWT tidak valid.'));
+      }
+
+      const officerDoc = await Officer.findById(payload.officerId)
+        .select('_id name email role nip assignedKelurahan isActive')
+        .lean();
+
+      if (!officerDoc) {
+        return next(new Error('UNAUTHORIZED: Akun petugas tidak ditemukan.'));
+      }
+
+      if (!officerDoc.isActive) {
+        return next(new Error('FORBIDDEN: Akun petugas sedang dinonaktifkan.'));
+      }
+
+      socket.data.officer = {
+        ...payload,
+        officerId: officerDoc._id.toString(),
+        email: officerDoc.email,
+        role: officerDoc.role,
+        nip: officerDoc.nip,
+        name: officerDoc.name,
+        ...(officerDoc.assignedKelurahan
+          ? { assignedKelurahan: officerDoc.assignedKelurahan.toString() }
+          : {}),
+      };
+
+      return next();
+    } catch {
+      return next(
+        new Error('UNAUTHORIZED: Token JWT tidak valid atau telah kedaluwarsa.')
+      );
+    }
+  });
+
+  io.on('connection', (socket: RespiraSocket) => {
+    const officer = socket.data.officer;
+    if (!officer) {
+      socket.disconnect(true);
+      return;
+    }
+
+    const joinedRooms: string[] = [
+      SOCKET_ROOMS.ALL_OFFICERS,
+      SOCKET_ROOMS.byRole(officer.role),
+    ];
+
+    void socket.join(SOCKET_ROOMS.ALL_OFFICERS);
+    void socket.join(SOCKET_ROOMS.byRole(officer.role));
+
+    if (officer.assignedKelurahan) {
+      const kelRoom = SOCKET_ROOMS.byKelurahan(officer.assignedKelurahan);
+      joinedRooms.push(kelRoom);
+      void socket.join(kelRoom);
+    }
+
+    console.log(
+      `[Socket.io] Petugas terhubung: ${officer.email} (${officer.role}) | Socket ID: ${socket.id}`
+    );
+
+    socket.emit(SOCKET_EVENTS.CONNECTION_AUTHENTICATED, {
+      socketId: socket.id,
+      officer: {
+        officerId: officer.officerId,
+        ...(officer.name ? { name: officer.name } : {}),
+        email: officer.email,
+        role: officer.role,
+        nip: officer.nip,
+        ...(officer.assignedKelurahan
+          ? { assignedKelurahan: officer.assignedKelurahan }
+          : {}),
+      },
+      rooms: joinedRooms,
+      connectedAt: new Date().toISOString(),
+    });
+
+    socket.on('ping:dashboard', (callback) => {
+      if (typeof callback === 'function') {
+        callback({
+          pong: true,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log(
+        `[Socket.io] Petugas terputus: ${officer.email} | Socket ID: ${socket.id} | Alasan: ${reason}`
+      );
+    });
+  });
+
+  ioInstance = io;
+  console.log('[Socket.io] WebSocket server siap menerima koneksi terautentikasi JWT.');
+  return io;
+};
+
+/**
+ * Mengambil instance `SocketIOServer` yang sedang aktif.
+ *
+ * @returns Instance `RespiraSocketServer` atau `null` jika belum diinisialisasi
+ */
+export const getSocketServer = (): RespiraSocketServer | null => ioInstance;
+
+/**
+ * Mengirimkan broadcast event `report:new` ke seluruh petugas terautentikasi
+ * di Dasbor Petugas saat laporan warga baru masuk atau diperbarui.
+ *
+ * @param payload - Data laporan baru beserta koordinat presisi (`geom`)
+ */
+export const emitNewReport = (payload: NewReportSocketPayload): void => {
+  if (!ioInstance) {
+    return;
+  }
+
+  ioInstance.to(SOCKET_ROOMS.ALL_OFFICERS).emit(SOCKET_EVENTS.REPORT_NEW, payload);
+  console.log(
+    `[Socket.io] Broadcast "${SOCKET_EVENTS.REPORT_NEW}" -> reportId=${payload.report.id} (${payload.report.category})`
+  );
+};
+
+/**
+ * Mengirimkan broadcast event `cluster:detected` ke seluruh petugas terautentikasi
+ * ketika siklus DBSCAN mendeteksi klaster penyakit baru atau memperbarui klaster aktif.
+ *
+ * @param payload - Ringkasan hasil deteksi klaster dan daftar klaster terbaru
+ */
+export const emitClusterDetected = (payload: ClusterDetectedSocketPayload): void => {
+  if (!ioInstance) {
+    return;
+  }
+
+  ioInstance
+    .to(SOCKET_ROOMS.ALL_OFFICERS)
+    .emit(SOCKET_EVENTS.CLUSTER_DETECTED, payload);
+  console.log(
+    `[Socket.io] Broadcast "${SOCKET_EVENTS.CLUSTER_DETECTED}" -> ${payload.clustersDetected} klaster aktif`
+  );
+};
+
+/**
+ * Mengirimkan broadcast event `cluster:updated` ke seluruh petugas terautentikasi
+ * ketika status penanganan suatu klaster diubah melalui `PATCH /api/clusters/:id`.
+ *
+ * @param payload - Informasi perubahan status klaster dan data klaster terbaru
+ */
+export const emitClusterUpdated = (payload: ClusterUpdatedSocketPayload): void => {
+  if (!ioInstance) {
+    return;
+  }
+
+  ioInstance
+    .to(SOCKET_ROOMS.ALL_OFFICERS)
+    .emit(SOCKET_EVENTS.CLUSTER_UPDATED, payload);
+  console.log(
+    `[Socket.io] Broadcast "${SOCKET_EVENTS.CLUSTER_UPDATED}" -> ${payload.clusterCode} (${payload.previousStatus} -> ${payload.status})`
+  );
+};
