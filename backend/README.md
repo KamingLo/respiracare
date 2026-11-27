@@ -1,6 +1,6 @@
-# RespiraWatch — Backend WebGIS API
+# RespiraCare — Backend WebGIS API
 
-Official backend service for **RespiraWatch**, a **WebGIS Air Quality Monitoring & Environmental Disease Early Warning Platform (ISPA / Acute Respiratory Infection & Diarrhea)** powered by geospatial intelligence and citizen crowdsourcing.
+Official backend service for **RespiraCare**, a **WebGIS Air Quality Monitoring & Environmental Disease Early Warning Platform (ISPA / Acute Respiratory Infection & Diarrhea)** powered by geospatial intelligence and citizen crowdsourcing.
 
 ---
 
@@ -30,7 +30,7 @@ Official backend service for **RespiraWatch**, a **WebGIS Air Quality Monitoring
 
 ## 1. Purpose & Overview
 
-RespiraWatch combines two real-time data streams into a single spatial intelligence backend:
+RespiraCare combines two real-time data streams into a single spatial intelligence backend:
 1. **Bottom-Up Citizen Reporting:** Health symptom reports (`ispa` and `diare`) containing symptoms, sick count, patient age, severity level, and GeoJSON coordinates.
 2. **Top-Down Environmental & Pollution Data:** Air quality metrics (PM2.5, PM10, CO, NO2, SO2, O3, US AQI) and weather telemetry fetched from the **Open-Meteo API**, plus wildfire/hotspot detections from the **NASA FIRMS API**, mapped onto geospatial grid cells (`GridCell`).
 
@@ -226,9 +226,9 @@ All environment variables read by the backend source code:
 | `PORT` | No | `4000` | HTTP and Socket.io listening port. |
 | `NODE_ENV` | No | `development` | Application environment mode. |
 | `CORS_ORIGIN` | No | `*` | Allowed CORS origin for Socket.io. |
-| `MONGODB_URI` | Yes* | `mongodb://127.0.0.1:27017/respirawatch` | MongoDB connection URI. |
+| `MONGODB_URI` | Yes* | `mongodb://127.0.0.1:27017/respiracare` | MongoDB connection URI. |
 | `REDIS_URL` | No | `redis://127.0.0.1:6379` | Redis connection URI. |
-| `JWT_SECRET` | Yes (Prod) | `respirawatch_super_secret_jwt_key_change_in_prod` | Secret key for signing `HS256` JWT tokens. |
+| `JWT_SECRET` | Yes (Prod) | `respiracare_super_secret_jwt_key_change_in_prod` | Secret key for signing `HS256` JWT tokens. |
 | `JWT_EXPIRES_IN` | No | `8h` | Officer JWT expiration duration. |
 | `GEMINI_API_KEY` | Optional | *(empty)* | Google Gemini API key. If empty, AI endpoints fall back to heuristic/deterministic mode. |
 | `GEMINI_MODEL` | No | `gemini-flash-latest` | Gemini model identifier used for generation. |
@@ -266,9 +266,9 @@ pnpm seed:officers
 **Default Seeded Login Accounts:**
 | Role | Email | Password |
 | :--- | :--- | :--- |
-| `admin` | `admin@respirawatch.id` | `Password123!` |
-| `field_officer` | `field@respirawatch.id` | `Password123!` |
-| `health_analyst` | `analyst@respirawatch.id` | `Password123!` |
+| `admin` | `admin@respiracare.id` | `Password123!` |
+| `field_officer` | `field@respiracare.id` | `Password123!` |
+| `health_analyst` | `analyst@respiracare.id` | `Password123!` |
 
 ### Running the Server
 
@@ -357,7 +357,7 @@ All API routes are mounted under **`/api`** (and aliased directly at root **`/`*
 curl -X POST http://localhost:4000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@respirawatch.id",
+    "email": "admin@respiracare.id",
     "password": "Password123!"
   }'
 ```
@@ -413,10 +413,10 @@ socket.on('cluster:updated', (payload) => console.log('Cluster updated:', payloa
 
 ### Additional API Documentation
 
-For full payload contracts, test scenarios, and the Bruno API collection, see [../respirawatch-api-documentation/](../respirawatch-api-documentation/):
-- [Flow 1: Reporting & Public Map](../respirawatch-api-documentation/ALUR_1_PELAPORAN_DAN_PETA_PUBLIK.md)
-- [Flow 2: Open-Meteo AQI](../respirawatch-api-documentation/ALUR_2_OPEN_METEO_AQI.md)
-- [Flow 3: Spatial-Temporal Cluster Detection](../respirawatch-api-documentation/ALUR_3_DETEKSI_KLASTER_SPASIAL_TEMPORAL.md)
-- [Flow 4: Real-Time Socket & Officer Dashboard](../respirawatch-api-documentation/ALUR_4_REALTIME_SOCKET_DAN_DASBOR_PETUGAS.md)
-- [Flow 5: Generative AI Classification & Summary](../respirawatch-api-documentation/ALUR_5_AI_GENERATIVE_KLASIFIKASI_DAN_RINGKASAN.md)
-- [Flow 6: NASA FIRMS Analytics & CSV Export](../respirawatch-api-documentation/ALUR_6_ANALITIK_NASA_FIRMS_DAN_EXPORT_CSV.md)
+For full payload contracts, test scenarios, and the Bruno API collection, see [../respiracare-api-documentation/](../respiracare-api-documentation/):
+- [Flow 1: Reporting & Public Map](../respiracare-api-documentation/ALUR_1_PELAPORAN_DAN_PETA_PUBLIK.md)
+- [Flow 2: Open-Meteo AQI](../respiracare-api-documentation/ALUR_2_OPEN_METEO_AQI.md)
+- [Flow 3: Spatial-Temporal Cluster Detection](../respiracare-api-documentation/ALUR_3_DETEKSI_KLASTER_SPASIAL_TEMPORAL.md)
+- [Flow 4: Real-Time Socket & Officer Dashboard](../respiracare-api-documentation/ALUR_4_REALTIME_SOCKET_DAN_DASBOR_PETUGAS.md)
+- [Flow 5: Generative AI Classification & Summary](../respiracare-api-documentation/ALUR_5_AI_GENERATIVE_KLASIFIKASI_DAN_RINGKASAN.md)
+- [Flow 6: NASA FIRMS Analytics & CSV Export](../respiracare-api-documentation/ALUR_6_ANALITIK_NASA_FIRMS_DAN_EXPORT_CSV.md)
