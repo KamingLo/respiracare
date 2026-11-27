@@ -1,11 +1,11 @@
-# Product Requirements Document (PRD) — RespiraWatch Backend API
+# Product Requirements Document (PRD) — RespiraCare Backend API
 
 ---
 
 ## 1. Gambaran Umum Produk (Product Overview)
  
-### 1.1. Apa Itu RespiraWatch?
-**RespiraWatch** adalah platform **WebGIS Pemantauan Kualitas Udara & Peringatan Dini Penyakit Lingkungan (ISPA & Diare)** berbasis spasial (*Geospatial Intelligence*) dan partisipasi warga (*Crowdsourcing*).
+### 1.1. Apa Itu RespiraCare?
+**RespiraCare** adalah platform **WebGIS Pemantauan Kualitas Udara & Peringatan Dini Penyakit Lingkungan (ISPA & Diare)** berbasis spasial (*Geospatial Intelligence*) dan partisipasi warga (*Crowdsourcing*).
 
 Sistem ini menggabungkan dua sumber data utama secara *real-time*:
 1. **Data Partisipatif Warga (Bottom-Up):** Laporan keluhan kesehatan warga (ISPA dan Diare) beserta gejala, jumlah penderita, tingkat keparahan, dan titik koordinat lokasi.
@@ -29,7 +29,7 @@ Sistem ini menggabungkan dua sumber data utama secara *real-time*:
 
 ## 2. Tech Stack & Arsitektur Infrastruktur
 
-| Lapisan | Teknologi | Kegunaan dalam RespiraWatch |
+| Lapisan | Teknologi | Kegunaan dalam RespiraCare |
 | :--- | :--- | :--- |
 | **Runtime & Bahasa** | Node.js + TypeScript (ESM) | Eksekusi server modern berbasis ES Modules dengan *strict typing*. |
 | **Web Framework** | Express.js | Routing REST API, middleware pipeline, dan sekuriti (`helmet`). |

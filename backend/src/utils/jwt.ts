@@ -9,7 +9,7 @@ export interface JwtOfficerPayload extends JWTPayload {
 }
 
 export const getJwtSecretKey = (): Uint8Array => {
-  const secret = process.env.JWT_SECRET || 'respirawatch_super_secret_jwt_key_change_in_prod';
+  const secret = process.env.JWT_SECRET || 'respiracare_super_secret_jwt_key_change_in_prod';
   return new TextEncoder().encode(secret);
 };
 

@@ -1,11 +1,11 @@
 import mongoose from 'mongoose';
 
 export const connectDatabase = async (): Promise<void> => {
-  const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/respirawatch';
+  const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/respiracare';
 
   try {
     mongoose.connection.on('connected', () => {
-      console.log('[MongoDB] Terhubung ke database RespiraWatch');
+      console.log('[MongoDB] Terhubung ke database RespiraCare');
     });
 
     mongoose.connection.on('error', (err) => {
