@@ -1,36 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RespiraCare Frontend
 
-## Getting Started
+Next.js 16 + Tailwind CSS 4. Visual style follows the Figma export (rounded green UI, AQI hero card, five-colour scale).
 
-First, run the development server:
+## Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+pnpm dev     # http://localhost:3000
+pnpm build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Routes
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Route | Figma screen |
+| :-- | :-- |
+| `/` | 00 Splash |
+| `/peta` | 01 Peta Publik Warga, 08 state kosong (pilih Kel. Sungai Baru) |
+| `/lapor` | 02 Form Lapor Gejala |
+| `/lapor/memproses` | 09 State loading |
+| `/lapor/konfirmasi` | 03 Konfirmasi AI |
+| `/lapor/hasil` | 04 Kartu Hasil |
+| `/lapor/kendala` | 10 State error GPS / jaringan |
+| `/klinik` | Tab Klinik (tanpa desain Figma, memakai gaya kartu yang sama) |
+| `/petugas/login` | 05 Login Petugas |
+| `/petugas` | 06 Dasbor mobile, D01 Dasbor desktop (>= 1024px) |
+| `/petugas/klaster/[id]` | 07 Detail Klaster |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Data
 
-## Learn More
+Semua data masih contoh lokal di `src/lib/data.ts`. Titik sambung ke backend:
 
-To learn more about Next.js, take a look at the following resources:
+- Login petugas: `signInOfficer` di `src/lib/officer-session.ts` (ganti dengan `POST /api/auth/login`).
+- Klasifikasi gejala: `classifyStory` di `src/lib/symptoms.ts` (ganti dengan `POST /api/ai/classify`).
+- Kirim laporan: tombol Konfirmasi di `src/app/lapor/konfirmasi/page.tsx` (ganti dengan `POST /api/reports`).
+- Peta: `src/components/map-canvas.tsx` berupa ilustrasi SVG; kontrak marker bisa dipindah ke Leaflet atau MapLibre.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Brand
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Logo ada di `public/logo*.png`, ikon aplikasi di `src/app/icon.png` dan `apple-icon.png`. Font: Nunito (paket `@fontsource-variable/nunito`, tanpa request ke Google Fonts).
